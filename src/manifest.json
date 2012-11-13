@@ -1,0 +1,23 @@
+{
+  "name": "GitHub Search",
+  "version": "1.0",
+  "description": "Search GitHub repos - The easy way",
+  "homepage_url": "https://github.com/ushis/github-search-chrome-extension",
+  "update_url": "https://github.com/ushis/github-search-chrome-extension/raw/master/updates.xml",
+  "icons": {
+  },
+  "manifest_version": 2,
+  "omnibox": {
+    "keyword": "gh"
+  },
+  "permissions": [
+    "https://api.github.com/"
+  ],
+  "background": {
+    "scripts": [
+      "jquery.min.js",
+      "jquery-localstorage-cache.js",
+      "github_search.js"
+    ]
+  }
+}
