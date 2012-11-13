@@ -6,6 +6,8 @@ Search GitHub repositories from your omnibar.
 
 Type **gh** and **Tab** and find some repos.
 
+Here is a video: https://www.youtube.com/watch?v=3DVKugwv870
+
 ### Supported queries.
 
 - ```searchterm``` Searches all repos.
