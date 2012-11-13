@@ -56,13 +56,13 @@
 
     // Searches the repos.
     askForRepos: function(query, callback) {
-      var that = this;
+      var self = this;
       var uri = this.apiUris.search.replace(':query', encodeURIComponent(query));
 
       $.getJSON(uri, function(data) {
         var results = data.repositories.map(function(repo) {
           return {
-            url: that.baseUri + repo.username + '/' + repo.name,
+            url: self.baseUri + repo.username + '/' + repo.name,
             name: repo.name,
             user: repo.username
           };
@@ -75,14 +75,14 @@
 
   // Debounces a function.
   var debounce = function(callback, delay) {
-    var self = this, timeout, _arguments;
+    var self = this, timeout;
 
     return function() {
-      _arguments = arguments;
-      timeout = clearTimeout(timeout);
+      var args = arguments;
+      clearTimeout(timeout);
 
       timeout = setTimeout(function() {
-        callback.apply(self, _arguments);
+        callback.apply(self, args);
         timeout = 0;
       }, delay);
 
@@ -104,7 +104,7 @@
 
       callback(results);
     });
-  }, 250));
+  }, 200));
 
   // Catch the submission.
   chrome.omnibox.onInputEntered.addListener(function (uri) {

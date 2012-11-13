@@ -13,5 +13,5 @@ Type **gh** and **Tab** and find some repos.
 
 ## Where?
 
-- Download: https://github.com/ushis/github-search-chrome-extensions/downloads
-- Clone: ```git clone https://github.com/ushis/github-search-chrome-extension.git```
+- https://github.com/ushis/github-search-chrome-extension/downloads
+- ```git clone https://github.com/ushis/github-search-chrome-extension.git```
