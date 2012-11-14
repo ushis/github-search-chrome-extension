@@ -15,5 +15,5 @@ Here is a video: https://www.youtube.com/watch?v=3DVKugwv870
 
 ## Where?
 
-- https://github.com/ushis/github-search-chrome-extension/downloads
+- [Chrome WebStore](https://chrome.google.com/webstore/detail/github-search/deoidkimdgonjkhffoaieoejhfcmcfbn)
 - ```git clone https://github.com/ushis/github-search-chrome-extension.git```
