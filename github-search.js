@@ -90,6 +90,21 @@
     };
   };
 
+  // Wrappes found substrings in <match> tags.
+  var highlight = function(string, substring) {
+    return string.replace(substring, '<match>' + substring + '</match>');
+  };
+
+  // Creates a description for a repo.
+  var descriptionFor = function(repo, query) {
+    if (query.indexOf('/') === -1)
+      return highlight(repo.user + '/' + repo.name, query);
+
+    query = query.split('/').slice(1).join('/');
+
+    return repo.user + '/' + highlight(repo.name, query);
+  };
+
   // Catch the input.
   chrome.omnibox.onInputChanged.addListener(debounce(function(query, callback) {
     if ( ! query) return;
@@ -98,7 +113,7 @@
       var results = data.slice(0, 5).map(function(repo) {
         return {
           content: repo.url,
-          description: '<dim>' + repo.user + '/' + repo.name  + '</dim>'
+          description: '<dim>' + descriptionFor(repo, query) + '</dim>'
         };
       });
 
