@@ -16,7 +16,7 @@
 
     // Some api uris.
     apiUris: {
-      user: 'https://api.github.com/users/:user/repos',
+      user: 'https://api.github.com/users/:user/repos?sort=pushed',
       search: 'https://api.github.com/legacy/repos/search/:query'
     },
 
