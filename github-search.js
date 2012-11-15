@@ -46,7 +46,8 @@
           return {
             url: repo.html_url,
             name: repo.name,
-            user: repo.owner.login
+            user: repo.owner.login,
+            desc: (repo.description || '').slice(0, 66)
           };
         });
 
@@ -64,7 +65,8 @@
           return {
             url: self.baseUri + repo.username + '/' + repo.name,
             name: repo.name,
-            user: repo.username
+            user: repo.username,
+            desc: (repo.description || '').slice(0, 66)
           };
         });
 
@@ -90,6 +92,14 @@
     };
   };
 
+  // Escapes some special XML chars.
+  var xmlEncode = function(string) {
+    return string.replace(/&/g, '&amp;')
+                 .replace(/</g, '&lt;')
+                 .replace(/>/g, '&gt;')
+                 .replace(/"/g, '&quot;');
+  };
+
   // Wrappes found substrings in <match> tags.
   var highlight = function(string, substring) {
     return string.replace(substring, '<match>' + substring + '</match>');
@@ -97,12 +107,20 @@
 
   // Creates a description for a repo.
   var descriptionFor = function(repo, query) {
-    if (query.indexOf('/') === -1)
-      return highlight(repo.user + '/' + repo.name, query);
+    var _repo = {}, desc = '<url>';
 
-    query = query.split('/').slice(1).join('/');
+    for (var attr in repo)
+      _repo[attr] = xmlEncode(repo[attr]);
 
-    return repo.user + '/' + highlight(repo.name, query);
+    if (query.indexOf('/') === -1) {
+      query = xmlEncode(query);
+      desc += highlight(_repo.user + '/' + _repo.name, query);
+    } else {
+      query = xmlEncode(query.split('/').slice(1).join('/'));
+      desc += _repo.user + '/' + highlight(_repo.name, query);
+    }
+
+    return desc + '</url> <dim>' + highlight(_repo.desc, query) + '</dim>';
   };
 
   // Catch the input.
@@ -113,7 +131,7 @@
       var results = data.slice(0, 5).map(function(repo) {
         return {
           content: repo.url,
-          description: '<dim>' + descriptionFor(repo, query) + '</dim>'
+          description: descriptionFor(repo, query)
         };
       });
 
