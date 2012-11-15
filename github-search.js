@@ -16,7 +16,7 @@
     [/&/g, '&amp;'],
     [/</g, '&lt;'],
     [/>/g, '&gt;'],
-    [/"/, '&quot;']
+    [/"/g, '&quot;']
   ];
 
   // Chrome displays max 5 results.
@@ -85,9 +85,9 @@
     }
 
     if (typeof(obj) === 'string') {
-      for (var rule in sanitizationRules) {
+      sanitizationRules.forEach(function(rule) {
         obj = obj.replace(rule[0], rule[1]);
-      }
+      });
 
       return obj;
     }
@@ -143,9 +143,9 @@
   // Builds a repo description.
   var repoDescription = function(repo, query, highlightUser) {
     repo = sanitize(repo), query = sanitize(query);
-    var user = highlightUser ? highlight(repo.user, query) : repo.user;
 
-    return '<url>' + user + '/' + highlight(repo.name, query) + '</url> <dim>' +
+    return '<url>' + (highlightUser ? highlight(repo.user, query) : repo.user) +
+           '/' + highlight(repo.name, query) + '</url> <dim>' +
            highlight(repo.desc.slice(0, 60), query) + '</dim>';
   };
 
@@ -162,7 +162,7 @@
     }
 
     if (query[0] === '@') {
-      return findUsers(query.slice(1), callback);
+      return findUsers(query.slice(1).trim(), callback);
     }
 
     if (query.indexOf('/') === -1) {
