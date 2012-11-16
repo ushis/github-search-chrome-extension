@@ -74,29 +74,28 @@
     return baseLocations[keys[0]] + path;
   };
 
-  // Sanitizes all arguments.
-  var sanitize = function() {
-    var results = Array.prototype.map.call(arguments, function(arg) {
-      if (arg === null || arg === undefined) {
-        return '';
-      }
-
-      if (typeof(arg) !== 'string') {
-        arg = String(arg);
-      }
-
-      sanitizationRules.forEach(function(rule) {
-        arg = arg.replace(rule[0], rule[1]);
-      });
-
-      return arg;
-    });
-
-    if (results.length < 2) {
-      return results[0];
+  // Sanitizes the argument. Returns a string.
+  var sanitize = function(obj) {
+    if (obj === null || obj === undefined) {
+      return '';
     }
 
-    return results;
+    if (typeof(obj) !== 'string') {
+      obj = String(obj);
+    }
+
+    sanitizationRules.forEach(function(rule) {
+      obj = obj.replace(rule[0], rule[1]);
+    });
+
+    return obj;
+  };
+
+  // Returns an array of all sanitized arguments.
+  var sanitizeAll = function() {
+    return Array.prototype.map.call(arguments, function(arg) {
+      return sanitize(arg);
+    });
   };
 
   // Debounces a function.
@@ -142,7 +141,7 @@
 
   // Builds a user description.
   var userDescription = function(user, query) {
-    user = sanitize(user.login, user.name);
+    user = sanitizeAll(user.login, user.name);
     query = sanitize(query);
 
     return tag('url', '@' + highlight(user[0], query)) + ' ' +
@@ -151,7 +150,7 @@
 
   // Builds a repo description.
   var repoDescription = function(repo, query, highlightUser) {
-    repo = sanitize(repo.user, repo.name, repo.desc.slice(0, 60));
+    repo = sanitizeAll(repo.user, repo.name, repo.desc.slice(0, 60));
     query = sanitize(query);
 
     if (highlightUser) {
