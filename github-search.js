@@ -74,6 +74,11 @@
     return baseLocations[keys[0]] + path;
   };
 
+  // Simple check if a string is a "valid" HTTP(S) url.
+  var isUrl = function(string) {
+    return !! string.match(/^http(?:s)?:\/\//);
+  };
+
   // Sanitizes the argument. Returns a string.
   var sanitize = function(obj) {
     if (obj === null || obj === undefined) {
@@ -130,35 +135,33 @@
 
   // Wrappes substrings in <match> tags.
   var highlight = function(string, query) {
-    if (query === '') {
-      return string;
-    }
+    if (query === '') return string;
 
-    var regex = query.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&');
+    query = query.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&');
 
-    return string.replace(RegExp(regex, 'gi'), tag('match', '$&'));
+    return string.replace(RegExp(query, 'gi'), tag('match', '$&'));
   };
 
   // Builds a user description.
   var userDescription = function(user, query) {
-    user = sanitizeAll(user.login, user.name);
     query = sanitize(query);
 
-    return tag('url', '@' + highlight(user[0], query)) + ' ' +
-           tag('dim', highlight(user[1], query));
+    user = sanitizeAll(user.login, user.name).map(function(value) {
+      return highlight(value, query);
+    });
+
+    return tag('url', '@' + user[0]) + ' ' + tag('dim', user[1]);
   };
 
   // Builds a repo description.
   var repoDescription = function(repo, query, highlightUser) {
-    repo = sanitizeAll(repo.user, repo.name, repo.desc.slice(0, 60));
     query = sanitize(query);
 
-    if (highlightUser) {
-      repo[0] = highlight(repo[0], query);
-    }
+    repo = sanitizeAll(repo.user, repo.name, repo.desc.slice(0, 60)).map(function(value, i) {
+      return (i > 0 || highlightUser) ? highlight(value, query) : value;
+    });
 
-    return tag('url', repo[0] + '/' + highlight(repo[1], query)) + ' ' +
-           tag('dim', highlight(repo[2], query));
+    return tag('url', repo[0] + '/' + repo[1]) + ' ' + tag('dim', repo[2]);
   };
 
   //
@@ -249,10 +252,8 @@
 
   // Open the new page on enter.
   chrome.omnibox.onInputEntered.addListener(function (url) {
-    if ( ! url.match(/^http(?:s)?:\/\//)) {
-      url = urlFor('html.search', { query: url });
-    }
-
-    chrome.tabs.update({ url: url });
+    chrome.tabs.update({
+      url: isUrl(url) ? url : urlFor('html.search', { query: url })
+    });
   });
 })(jQuery);
