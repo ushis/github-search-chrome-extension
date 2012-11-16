@@ -74,31 +74,29 @@
     return baseLocations[keys[0]] + path;
   };
 
-  // Sanitizes everything in an object.
-  var sanitize = function(obj) {
-    if (obj === null || obj === undefined) {
-      return '';
-    }
+  // Sanitizes all arguments.
+  var sanitize = function() {
+    var results = Array.prototype.map.call(arguments, function(arg) {
+      if (arg === null || arg === undefined) {
+        return '';
+      }
 
-    if (typeof(obj) === 'number') {
-      obj = String(obj);
-    }
+      if (typeof(arg) !== 'string') {
+        arg = String(arg);
+      }
 
-    if (typeof(obj) === 'string') {
       sanitizationRules.forEach(function(rule) {
-        obj = obj.replace(rule[0], rule[1]);
+        arg = arg.replace(rule[0], rule[1]);
       });
 
-      return obj;
+      return arg;
+    });
+
+    if (results.length < 2) {
+      return results[0];
     }
 
-    var _obj = {};
-
-    for (var attr in obj) {
-      _obj[attr] = sanitize(obj[attr]);
-    }
-
-    return _obj;
+    return results;
   };
 
   // Debounces a function.
@@ -121,6 +119,16 @@
   // Result formatters.
   //
 
+  // Creates a tag with some content.
+  //
+  //   tag('dim', 'Hello World');
+  //   //=> '<dim>Hello World</dim>'
+  //
+  // Returns a String.
+  var tag = function(tag, content) {
+    return '<' + tag + '>' + content + '</' + tag + '>';
+  };
+
   // Wrappes substrings in <match> tags.
   var highlight = function(string, query) {
     if (query === '') {
@@ -129,24 +137,29 @@
 
     var regex = query.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&');
 
-    return string.replace(RegExp(regex, 'gi'), '<match>$&</match>');
+    return string.replace(RegExp(regex, 'gi'), tag('match', '$&'));
   };
 
   // Builds a user description.
   var userDescription = function(user, query) {
-    user = sanitize(user), query = sanitize(query);
+    user = sanitize(user.login, user.name);
+    query = sanitize(query);
 
-    return '<url>@' + highlight(user.login, query) + '</url> <dim>' +
-           highlight(user.name , query) + '</dim>';
+    return tag('url', '@' + highlight(user[0], query)) + ' ' +
+           tag('dim', highlight(user[1], query));
   };
 
   // Builds a repo description.
   var repoDescription = function(repo, query, highlightUser) {
-    repo = sanitize(repo), query = sanitize(query);
+    repo = sanitize(repo.user, repo.name, repo.desc.slice(0, 60));
+    query = sanitize(query);
 
-    return '<url>' + (highlightUser ? highlight(repo.user, query) : repo.user) +
-           '/' + highlight(repo.name, query) + '</url> <dim>' +
-           highlight(repo.desc.slice(0, 60), query) + '</dim>';
+    if (highlightUser) {
+      repo[0] = highlight(repo[0], query);
+    }
+
+    return tag('url', repo[0] + '/' + highlight(repo[1], query)) + ' ' +
+           tag('dim', highlight(repo[2], query));
   };
 
   //
@@ -157,7 +170,7 @@
   var request = function(query, callback) {
     query = query.trim().toLowerCase();
 
-    if (query === '' || query === '@') {
+    if (query === '' || query === '@' || query[0] === '/') {
       return;
     }
 
