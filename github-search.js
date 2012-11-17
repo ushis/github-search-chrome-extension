@@ -18,6 +18,9 @@
   // Suffix of the ttl cache key.
   var ttlKeySuffix = '%ttl';
 
+  // Clear the cache at the beginning of the session.
+  localStorage.clear();
+
   // Chrome displays max 5 results.
   var maxResults = 5;
 
@@ -141,7 +144,7 @@
     var ttlKey = key + ttlKeySuffix;
     var ttl = localStorage.getItem(ttlKey);
 
-    if (ttl && ttl < +new Date()) {
+    if ( ! ttl || ttl < +new Date()) {
       localStorage.removeItem(key);
       localStorage.removeItem(ttlKey);
       return null;
