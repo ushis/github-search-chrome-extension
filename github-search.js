@@ -1,15 +1,8 @@
-(function($) {
+(function() {
 
   //
   // Setup.
   //
-
-  // Use localStorage cache for all ajax requests.
-  $.ajaxSetup({
-    dataType: 'json',
-    localCache: true,
-    cacheTTL: 6 // hours
-  });
 
   // XML sanitization rules.
   var sanitizationRules = [
@@ -18,6 +11,9 @@
     [/>/g, '&gt;'],
     [/"/g, '&quot;']
   ];
+
+  // Invalidate cache after 6 hours.
+  var cacheTTL = 6;
 
   // Chrome displays max 5 results.
   var maxResults = 5;
@@ -120,6 +116,79 @@
   };
 
   //
+  // Ajax.
+  //
+
+  // Stores a result in the cache.
+  var cache = function(key, value) {
+    var ttlKey = key + '%ttl';
+
+    try {
+      localStorage.setItem(key, value);
+      localStorage.setItem(ttlKey, +new Date() + (1000 * 60 * 60 * cacheTTL));
+    } catch (error) {
+      localStorage.removeItem(key);
+      localStorage.removeItem(ttlKey);
+      console.log('[Cache] Could not store value: ' + value);
+    }
+  };
+
+  // Retrieves a value from the cache. Returns null on miss.
+  var getFromCache = function(key) {
+    var ttlKey = key + '%ttl';
+    var ttl = localStorage.getItem(ttlKey);
+
+    if (ttl && ttl < +new Date()) {
+      localStorage.removeItem(key);
+      localStorage.removeItem(ttlKey);
+      return null;
+    }
+
+    var value = localStorage.getItem(key);
+
+    if (value) {
+      try {
+        return JSON.parse(value);
+      } catch (error) {
+        console.log('[Cache] Invalid JSON: ' + value);
+      }
+    }
+
+    return null;
+  };
+
+  // Gets some JSON data from somewhere.
+  var get = function(url, callback) {
+    var value = getFromCache(url);
+
+    if (value) {
+      return callback(value);
+    }
+
+    var xhr = new XMLHttpRequest();
+
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState !== 4) return;
+
+      if ((xhr.status < 200 || xhr.status > 299) && xhr.status !== 304) {
+        return console.log('[XHR] Error ' + xhr.status + ': ' + url);
+      }
+
+      try {
+        value = JSON.parse(xhr.responseText);
+      } catch (error) {
+        return console.log('[XHR] Invalid JSON: ' + xhr.responseText);
+      }
+
+      cache(url, xhr.responseText);
+      callback(value);
+    };
+
+    xhr.open('GET', url);
+    xhr.send();
+  };
+
+  //
   // Result formatters.
   //
 
@@ -190,7 +259,7 @@
 
   // Finds users.
   var findUsers = function(query, callback) {
-    $.getJSON(urlFor('api.users.search', { query: query }), function(data) {
+    get(urlFor('api.users.search', { query: query }), function(data) {
       var results = data.users.slice(0, maxResults).map(function(user) {
         return {
           content: urlFor('html.user', { user: user.username }),
@@ -207,7 +276,7 @@
 
   // Finds repos.
   var findRepos = function(query, callback) {
-    $.getJSON(urlFor('api.repos.search', { query: query }), function(data) {
+    get(urlFor('api.repos.search', { query: query }), function(data) {
       var results = data.repositories.slice(0, maxResults).map(function(repo) {
         return {
           content: urlFor('html.repo', { user: repo.username, repo: repo.name }),
@@ -225,7 +294,7 @@
 
   // Finds repos by a user.
   var findReposByUser = function(user, query, callback) {
-    $.getJSON(urlFor('api.users.repos', { user: user }), function(data) {
+    get(urlFor('api.users.repos', { user: user }), function(data) {
       var results = data.filter(function(repo) {
         return repo.name.toLowerCase().indexOf(query) > -1;
       }).slice(0, maxResults).map(function(repo) {
@@ -256,4 +325,4 @@
       url: isUrl(url) ? url : urlFor('html.search', { query: url })
     });
   });
-})(jQuery);
+}).call(this);
