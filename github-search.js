@@ -13,7 +13,10 @@
   ];
 
   // Invalidate cache after 6 hours.
-  var cacheTTL = 6;
+  var cacheTTL = 1000 * 60 * 60 * 6;
+
+  // Suffix of the ttl cache key.
+  var ttlKeySuffix = '%ttl';
 
   // Chrome displays max 5 results.
   var maxResults = 5;
@@ -121,11 +124,11 @@
 
   // Stores a result in the cache.
   var cache = function(key, value) {
-    var ttlKey = key + '%ttl';
+    var ttlKey = key + ttlKeySuffix;
 
     try {
       localStorage.setItem(key, value);
-      localStorage.setItem(ttlKey, +new Date() + (1000 * 60 * 60 * cacheTTL));
+      localStorage.setItem(ttlKey, +new Date() + cacheTTL);
     } catch (error) {
       localStorage.removeItem(key);
       localStorage.removeItem(ttlKey);
@@ -135,7 +138,7 @@
 
   // Retrieves a value from the cache. Returns null on miss.
   var getFromCache = function(key) {
-    var ttlKey = key + '%ttl';
+    var ttlKey = key + ttlKeySuffix;
     var ttl = localStorage.getItem(ttlKey);
 
     if (ttl && ttl < +new Date()) {
