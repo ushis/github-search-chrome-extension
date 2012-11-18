@@ -1,49 +1,51 @@
 (function() {
 
   //
-  // Setup.
+  // Config.
   //
+  var config = {
 
-  // XML sanitization rules.
-  var sanitizationRules = [
-    [/&/g, '&amp;'],
-    [/</g, '&lt;'],
-    [/>/g, '&gt;'],
-    [/"/g, '&quot;']
-  ];
+    // Chrome displays max 5 results.
+    maxResults: 5,
 
-  // Invalidate cache after 6 hours.
-  var cacheTTL = 1000 * 60 * 60 * 6;
+    // XML sanitization rules.
+    sanitizationRules: [
+      [/&/g, '&amp;'],
+      [/</g, '&lt;'],
+      [/>/g, '&gt;'],
+      [/"/g, '&quot;']
+    ],
 
-  // Suffix of the ttl cache key.
-  var ttlKeySuffix = '%ttl';
+    // Cache related settings.
+    cache: {
 
-  // Clear the cache at the beginning of the session.
-  localStorage.clear();
+      // Invalidate cache item after 8 hours.
+      ttl: 1000 * 60 * 60 * 0,
 
-  // Chrome displays max 5 results.
-  var maxResults = 5;
+      // Sweep the cache every hour.
+      sweepInterval: 1000 * 60 * 60 * 1,
 
-  // GitHub base urls.
-  var baseLocations = {
-    html: 'https://github.com',
-    api: 'https://api.github.com'
-  };
-
-  // Some GitHub paths we need.
-  var locations = {
-    html: {
-      user: '/:user',
-      repo: '/:user/:repo',
-      search: '/search?q=:query'
+      // Suffix for timestamp keys.
+      timestampSuffix: '%timestamp'
     },
-    api: {
-      users: {
-        repos: '/users/:user/repos?sort=pushed',
-        search: '/legacy/user/search/:query'
+
+    // GitHub locations.
+    locations: {
+      html: {
+        base: 'https://github.com',
+        user: '/:user',
+        repo: '/:user/:repo',
+        search: '/search?q=:query'
       },
-      repos: {
-        search: '/legacy/repos/search/:query'
+      api: {
+        base: 'https://api.github.com',
+        users: {
+          repos: '/users/:user/repos?sort=pushed',
+          search: '/legacy/user/search/:query'
+        },
+        repos: {
+          search: '/legacy/repos/search/:query'
+        }
       }
     }
   };
@@ -51,200 +53,304 @@
   //
   // Utils.
   //
+  var utils = {
 
-  // Returns the url for an Array of keys or a dotted path.
+    // Checks if a string is a suffix of another string.
+    endsWith: function(string, suffix) {
+      return string.indexOf(suffix, string.length - suffix.length) !== -1;
+    },
+
+    // Simple check if a string contains a HTTP(S) url.
+    isUrl: function(string) {
+      return !! string.match(/^http(?:s)?:\/\//);
+    },
+
+    // Returns the url for an Array of keys or a dotted path.
+    //
+    //   urlFor('api.users.search', { query: 'torvalds' });
+    //   //=> 'https://api.github.com/legacy/user/search/torvalds'
+    //
+    // The second argument is a object of with.
+    urlFor: function(keys, params) {
+      var path = config.locations;
+
+      if ( ! (keys instanceof Array)) {
+        keys = keys.split('.');
+      }
+
+      keys.forEach(function(key) {
+        path = path[key];
+      });
+
+      for (var param in params) {
+        path = path.replace(':' + param, encodeURIComponent(params[param]));
+      }
+
+      return config.locations[keys[0]].base + path;
+    },
+
+    // Sanitizes the argument. Returns a string.
+    sanitize: function(obj) {
+      if (obj === null || obj === undefined) {
+        return '';
+      }
+
+      if (typeof(obj) !== 'string') {
+        obj = String(obj);
+      }
+
+      config.sanitizationRules.forEach(function(rule) {
+        obj = obj.replace(rule[0], rule[1]);
+      });
+
+      return obj;
+    },
+
+    // Returns an array of all sanitized arguments.
+    sanitizeAll: function() {
+      return Array.prototype.map.call(arguments, function(arg) {
+        return this.sanitize(arg);
+      }, this);
+    },
+
+    // Debounces a function.
+    debounce: function(callback, delay) {
+      var timeout;
+
+      return function() {
+        var self = this, args = arguments;
+        clearTimeout(timeout);
+
+        timeout = setTimeout(function() {
+          callback.apply(self, args);
+        }, delay);
+
+        return this;
+      };
+    }
+  };
+
   //
-  //   urlFor('api.users.search', { query: 'torvalds' });
-  //   //=> 'https://api.github.com/legacy/user/search/torvalds'
+  // Cache.
   //
-  // The second argument is a object of with.
-  var urlFor = function(keys, params) {
-    var path = locations;
+  var cache = {
 
-    if ( ! (keys instanceof Array)) {
-      keys = keys.split('.');
+    // Retrieves an item from the cache.
+    get: function(key) {
+      try {
+        return JSON.parse(localStorage.getItem(key));
+      } catch (error) {
+        this.remove(key);
+        return null;
+      }
+    },
+
+    // Stores an item in the cache.
+    set: function(key, value) {
+      try {
+        localStorage.setItem(key, value);
+        this.setTimestampFor(key);
+      } catch (error) {
+        this.remove(key);
+      }
+    },
+
+    // Removes an item from the cache.
+    remove: function(key) {
+      localStorage.removeItem(key);
+      this.removeTimestampFor(key);
+    },
+
+    // Removes expired items from the cache.
+    sweep: function() {
+      Object.keys(localStorage).filter(function(key) {
+        return ! (this.isTimestampKey(key) || this.isValid(key));
+      }, this).forEach(function(key) {
+        this.remove(key);
+      }, this);
+    },
+
+    // Checks if a cached item is expired.
+    isValid: function(key) {
+      return this.getTimestampFor(key) > +new Date() - config.cache.ttl;
+    },
+
+    // Checks if a key is a timestamp key.
+    isTimestampKey: function(key) {
+      return utils.endsWith(key, config.cache.timestampSuffix);
+    },
+
+    // Returns the timestamp key for a key.
+    timestampKeyFor: function(key) {
+      return key + config.cache.timestampSuffix;
+    },
+
+    // Returns the timestamp of an item.
+    getTimestampFor: function(key) {
+      return Number(localStorage.getItem(this.timestampKeyFor(key))) || 0;
+    },
+
+    // Sets the timestamp of an item.
+    setTimestampFor: function(key) {
+      localStorage.setItem(this.timestampKeyFor(key), +new Date());
+    },
+
+    // Removes the timestamp of an item.
+    removeTimestampFor: function(key) {
+      localStorage.removeItem(this.timestampKeyFor(key));
     }
-
-    keys.forEach(function(key) {
-      path = path[key];
-    });
-
-    for (var param in params) {
-      path = path.replace(':' + param, encodeURIComponent(params[param]));
-    }
-
-    return baseLocations[keys[0]] + path;
-  };
-
-  // Simple check if a string is a "valid" HTTP(S) url.
-  var isUrl = function(string) {
-    return !! string.match(/^http(?:s)?:\/\//);
-  };
-
-  // Sanitizes the argument. Returns a string.
-  var sanitize = function(obj) {
-    if (obj === null || obj === undefined) {
-      return '';
-    }
-
-    if (typeof(obj) !== 'string') {
-      obj = String(obj);
-    }
-
-    sanitizationRules.forEach(function(rule) {
-      obj = obj.replace(rule[0], rule[1]);
-    });
-
-    return obj;
-  };
-
-  // Returns an array of all sanitized arguments.
-  var sanitizeAll = function() {
-    return Array.prototype.map.call(arguments, function(arg) {
-      return sanitize(arg);
-    });
-  };
-
-  // Debounces a function.
-  var debounce = function(callback, delay) {
-    var self = this, timeout;
-
-    return function() {
-      var args = arguments;
-      clearTimeout(timeout);
-
-      timeout = setTimeout(function() {
-        callback.apply(self, args);
-      }, delay);
-
-      return this;
-    };
   };
 
   //
   // Ajax.
   //
+  var ajax = {
 
-  // Stores a result in the cache.
-  var cache = function(key, value) {
-    var ttlKey = key + ttlKeySuffix;
+    // Gets some data.
+    get: function(path, params, callback) {
+      var url = utils.urlFor(path, params);
+      var value = cache.get(url);
 
-    try {
-      localStorage.setItem(key, value);
-      localStorage.setItem(ttlKey, +new Date() + cacheTTL);
-    } catch (error) {
-      localStorage.removeItem(key);
-      localStorage.removeItem(ttlKey);
-      console.log('[Cache] Could not store value: ' + value);
-    }
-  };
-
-  // Retrieves a value from the cache. Returns null on miss.
-  var getFromCache = function(key) {
-    var ttlKey = key + ttlKeySuffix;
-    var ttl = localStorage.getItem(ttlKey);
-
-    if ( ! ttl || ttl < +new Date()) {
-      localStorage.removeItem(key);
-      localStorage.removeItem(ttlKey);
-      return null;
-    }
-
-    var value = localStorage.getItem(key);
-
-    if (value) {
-      try {
-        return JSON.parse(value);
-      } catch (error) {
-        console.log('[Cache] Invalid JSON: ' + value);
-      }
-    }
-
-    return null;
-  };
-
-  // Gets some JSON data from somewhere.
-  var get = function(url, callback) {
-    var value = getFromCache(url);
-
-    if (value) {
-      return callback(value);
-    }
-
-    var xhr = new XMLHttpRequest();
-
-    xhr.onreadystatechange = function() {
-      if (xhr.readyState !== 4) return;
-
-      if ((xhr.status < 200 || xhr.status > 299) && xhr.status !== 304) {
-        return console.log('[XHR] Error ' + xhr.status + ': ' + url);
+      if (value) {
+        return callback(value);
       }
 
-      try {
-        value = JSON.parse(xhr.responseText);
-      } catch (error) {
-        return console.log('[XHR] Invalid JSON: ' + xhr.responseText);
-      }
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', url);
+      xhr.send();
 
-      cache(url, xhr.responseText);
-      callback(value);
-    };
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) return;
 
-    xhr.open('GET', url);
-    xhr.send();
+        if ((xhr.status < 200 || xhr.status > 299) && xhr.status !== 304) {
+          return console.log('[XHR] Error ' + xhr.status + ': ' + url);
+        }
+
+        try {
+          value = JSON.parse(xhr.responseText);
+        } catch (error) {
+          return console.log('[XHR] Invalid JSON: ' + xhr.responseText);
+        }
+
+        cache.set(url, xhr.responseText);
+        callback(value);
+      };
+    },
   };
 
   //
   // Result formatters.
   //
+  var format = {
 
-  // Creates a tag with some content.
-  //
-  //   tag('dim', 'Hello World');
-  //   //=> '<dim>Hello World</dim>'
-  //
-  // Returns a String.
-  var tag = function(tag, content) {
-    return '<' + tag + '>' + content + '</' + tag + '>';
+    // Creates a tag with some content.
+    //
+    //   tag('dim', 'Hello World');
+    //   //=> '<dim>Hello World</dim>'
+    //
+    // Returns a String.
+    tag: function(tag, content) {
+      return '<' + tag + '>' + content + '</' + tag + '>';
+    },
+
+    // Wrappes substrings in <match> tags.
+    highlight: function(string, query) {
+      if (query === '') return string;
+
+      query = query.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&');
+
+      return string.replace(RegExp(query, 'gi'), this.tag('match', '$&'));
+    },
+
+    // Builds a user description.
+    userDescription: function(user, query) {
+      query = utils.sanitize(query);
+
+      var user = utils.sanitizeAll(user.login, user.name).map(function(value) {
+        return this.highlight(value, query);
+      }, this);
+
+      return this.tag('url', '@' + user[0]) + ' ' + this.tag('dim', user[1]);
+    },
+
+    // Builds a repo description.
+    repoDescription: function(repo, query, highlightUser) {
+      query = utils.sanitize(query);
+      repo = utils.sanitizeAll(repo.name, repo.desc.slice(0, 60), repo.user);
+      var user = (highlightUser) ? this.highlight(repo.pop(), query) : repo.pop();
+
+      repo = repo.map(function(value) {
+        return this.highlight(value, query);
+      }, this)
+
+      return this.tag('url', user + '/' + repo[0]) + ' ' + this.tag('dim', repo[1]);
+    }
   };
 
-  // Wrappes substrings in <match> tags.
-  var highlight = function(string, query) {
-    if (query === '') return string;
+  //
+  // GitHub.
+  //
+  var github = {
 
-    query = query.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&');
+    // Finds users.
+    findUsers: function(query, callback) {
+      ajax.get('api.users.search', { query: query }, function(data) {
+        callback(data.users.slice(0, config.maxResults).map(function(user) {
+          return {
+            content: utils.urlFor('html.user', { user: user.username }),
+            description: format.userDescription({
+              login: user.username,
+              name: user.fullname
+            }, query)
+          };
+        }));
+      });
+    },
 
-    return string.replace(RegExp(query, 'gi'), tag('match', '$&'));
-  };
+    // Finds repos.
+    findRepos: function(query, callback) {
+      ajax.get('api.repos.search', { query: query }, function(data) {
+        callback(data.repositories.slice(0, config.maxResults).map(function(repo) {
+          return {
+            content: utils.urlFor('html.repo', {
+              user: repo.username,
+              repo: repo.name
+            }),
+            description: format.repoDescription({
+              name: repo.name,
+              user: repo.username,
+              desc: repo.description
+            }, query, true)
+          };
+        }));
+      });
+    },
 
-  // Builds a user description.
-  var userDescription = function(user, query) {
-    query = sanitize(query);
-
-    user = sanitizeAll(user.login, user.name).map(function(value) {
-      return highlight(value, query);
-    });
-
-    return tag('url', '@' + user[0]) + ' ' + tag('dim', user[1]);
-  };
-
-  // Builds a repo description.
-  var repoDescription = function(repo, query, highlightUser) {
-    query = sanitize(query);
-
-    repo = sanitizeAll(repo.user, repo.name, repo.desc.slice(0, 60)).map(function(value, i) {
-      return (i > 0 || highlightUser) ? highlight(value, query) : value;
-    });
-
-    return tag('url', repo[0] + '/' + repo[1]) + ' ' + tag('dim', repo[2]);
+    // Finds repos by a user.
+    findReposByUser: function(user, query, callback) {
+      ajax.get('api.users.repos', { user: user }, function(data) {
+        callback(data.filter(function(repo) {
+          return repo.name.toLowerCase().indexOf(query) > -1;
+        }).slice(0, config.maxResults).map(function(repo) {
+          return {
+            content: repo.html_url,
+            description: format.repoDescription({
+              name: repo.name,
+              user: repo.owner.login,
+              desc: repo.description
+            }, query, false)
+          };
+        }));
+      });
+    }
   };
 
   //
-  // Request methods.
+  // Lets go!
   //
 
-  // Processes a search request.
-  var request = function(query, callback) {
+  // Process search request.
+  chrome.omnibox.onInputChanged.addListener(utils.debounce(function(query, fn) {
     query = query.trim().toLowerCase();
 
     if (query === '' || query === '@' || query[0] === '/') {
@@ -252,83 +358,29 @@
     }
 
     if (query[0] === '@') {
-      return findUsers(query.slice(1).trim(), callback);
+      return github.findUsers(query.slice(1).trim(), fn);
     }
 
     if (query.indexOf('/') === -1) {
-      return findRepos(query, callback);
+      return github.findRepos(query, fn);
     }
 
     query = query.split('/');
-    findReposByUser(query.shift().trim(), query.join('/').trim(), callback);
-  };
-
-  // Finds users.
-  var findUsers = function(query, callback) {
-    get(urlFor('api.users.search', { query: query }), function(data) {
-      var results = data.users.slice(0, maxResults).map(function(user) {
-        return {
-          content: urlFor('html.user', { user: user.username }),
-          description: userDescription({
-            login: user.username,
-            name: user.fullname
-          }, query)
-        };
-      });
-
-      callback(results);
-    });
-  };
-
-  // Finds repos.
-  var findRepos = function(query, callback) {
-    get(urlFor('api.repos.search', { query: query }), function(data) {
-      var results = data.repositories.slice(0, maxResults).map(function(repo) {
-        return {
-          content: urlFor('html.repo', { user: repo.username, repo: repo.name }),
-          description: repoDescription({
-            name: repo.name,
-            user: repo.username,
-            desc: repo.description
-          }, query, true)
-        };
-      });
-
-      callback(results);
-    });
-  };
-
-  // Finds repos by a user.
-  var findReposByUser = function(user, query, callback) {
-    get(urlFor('api.users.repos', { user: user }), function(data) {
-      var results = data.filter(function(repo) {
-        return repo.name.toLowerCase().indexOf(query) > -1;
-      }).slice(0, maxResults).map(function(repo) {
-        return {
-          content: repo.html_url,
-          description: repoDescription({
-            name: repo.name,
-            user: repo.owner.login,
-            desc: repo.description
-          }, query, false)
-        };
-      });
-
-      callback(results);
-    });
-  };
-
-  //
-  // Chrome events.
-  //
-
-  // Process search request.
-  chrome.omnibox.onInputChanged.addListener(debounce(request, 250));
+    github.findReposByUser(query.shift().trim(), query.join('/').trim(), fn);
+  }, 250));
 
   // Open the new page on enter.
   chrome.omnibox.onInputEntered.addListener(function (url) {
     chrome.tabs.update({
-      url: isUrl(url) ? url : urlFor('html.search', { query: url })
+      url: utils.isUrl(url) ? url : utils.urlFor('html.search', { query: url })
     });
   });
+
+  // Sweep the cache on startup.
+  cache.sweep();
+
+  // Install cache sweeper intervall.
+  setInterval(function() {
+    cache.sweep();
+  }, config.cache.sweepInterval);
 }).call(this);
