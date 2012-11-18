@@ -19,8 +19,8 @@
     // Cache related settings.
     cache: {
 
-      // Invalidate cache item after 8 hours.
-      ttl: 1000 * 60 * 60 * 0,
+      // Invalidate cache item after 24 hours.
+      ttl: 1000 * 60 * 60 * 24,
 
       // Sweep the cache every hour.
       sweepInterval: 1000 * 60 * 60 * 1,
