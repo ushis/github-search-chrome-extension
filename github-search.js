@@ -65,6 +65,11 @@
       return !! string.match(/^http(?:s)?:\/\//);
     },
 
+    // Returns a random element from an array (or string).
+    pickRandom: function(array) {
+      return array[Math.floor(Math.random() * array.length)];
+    },
+
     // Returns the url for an Array of keys or a dotted path.
     //
     //   urlFor('api.users.search', { query: 'torvalds' });
@@ -146,12 +151,21 @@
     },
 
     // Stores an item in the cache.
-    set: function(key, value) {
+    set: function(key, value, attempts) {
       try {
         localStorage.setItem(key, value);
-        this.setTimestampFor(key);
+        return this.setTimestampFor(key);
       } catch (error) {
         this.remove(key);
+      }
+
+      if (attempts === undefined) {
+        attempts = 3;
+      }
+
+      if (attempts > 0) {
+        this.remove(utils.pickRandom(this.keys()));
+        this.set(key, value, attempts - 1);
       }
     },
 
@@ -163,10 +177,15 @@
 
     // Removes expired items from the cache.
     sweep: function() {
-      Object.keys(localStorage).filter(function(key) {
-        return ! (this.isTimestampKey(key) || this.isValid(key));
-      }, this).forEach(function(key) {
-        this.remove(key);
+      this.keys().forEach(function(key) {
+        if ( ! this.isValid(key)) this.remove(key);
+      }, this);
+    },
+
+    // Returns an array of all cached keys.
+    keys: function() {
+      return Object.keys(localStorage).filter(function(key) {
+        return ! this.isTimestampKey(key);
       }, this);
     },
 
