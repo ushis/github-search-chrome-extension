@@ -1,6 +1,6 @@
 {
   "name": "GitHub Search",
-  "version": "3.4",
+  "version": "4.0",
   "description": "Search GitHub repos",
   "homepage_url": "https://github.com/ushis/github-search-chrome-extension",
   "icons": {
@@ -13,10 +13,13 @@
     "keyword": "gh"
   },
   "permissions": [
+    "storage",
+    "unlimitedStorage",
     "https://api.github.com/"
   ],
   "background": {
     "scripts": [
+      "o.js",
       "github-search.js"
     ]
   }

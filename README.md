@@ -13,6 +13,7 @@ Here is a video: https://www.youtube.com/watch?v=3DVKugwv870
 - ```searchterm``` Searches all repos.
 - ```username/searchterm``` Searches the repos of a user.
 - ```@searchterm``` Searches for users.
+- ```:searchterm``` Searches the github search history.
 
 ## Where?
 
